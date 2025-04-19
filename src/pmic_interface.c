@@ -19,7 +19,8 @@
 /*===========================================================================*
  * Local Preprocessor #define Constants
  *===========================================================================*/
-#define KEEP_ALIVE_TIMEOUT                 500      /* 500 * 10ms = 5sec */
+/* This value was changed from 500 to 4 to simplify unit testing */
+#define KEEP_ALIVE_TIMEOUT                 4      /* 500 * 10ms = 5sec */
 
 /* This value was changed from 800 to 4 to simplify unit testing */
 #define FORCE_SHUTDOWN_TIMEOUT             4        /* 800 * 10ms = 8sec */

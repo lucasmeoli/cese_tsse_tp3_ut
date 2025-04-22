@@ -338,7 +338,6 @@ void PMIC_Controller (void)
     switch(PMIC_state)
     {
         case PMIC_CS_INIT:
-
                 PMIC_PowerUp_Condition = POWERDOWN;
                 pmic_stop_activities();
                 PMIC_state = PMIC_CS_OFF;

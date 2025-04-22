@@ -51,35 +51,30 @@ SPDX-License-Identifier: MIT
 
 /* === Private function implementation ========================================================= */
 void setUp(void) {
-    GPIO_setAsOutputPin_Expect(POWER_ON_PORT, POWER_ON_PIN);    // PORT_PwrOn must be configurated
+    GPIO_setAsOutputPin_Expect(POWER_ON_PORT, POWER_ON_PIN);    // PORT_PwrOn must be configured
     GPIO_setOutputLowOnPin_Expect(POWER_ON_PORT, POWER_ON_PIN); // PORT_PwrOn must be cleared
 
     PMIC_Init();
 }
 
-static void simulate_power_button_pressed(void) {
+static void _simulate_power_button_press(void) {
     INPUTS_Get_Value_ExpectAndReturn(IN_PowerBtn, INPUT_ACTIVE);
     INPUTS_Get_Value_ExpectAndReturn(IN_PowerBtn, INPUT_ACTIVE);
 }
 
-static void simulate_ignition_on(void) {
-    INPUTS_Get_Value_ExpectAndReturn(IN_PowerBtn, INPUT_INACTIVE);
-    INPUTS_Get_Value_ExpectAndReturn(IN_Ignition, INPUT_ACTIVE);
-    INPUTS_Get_Value_ExpectAndReturn(IN_PowerBtn, INPUT_INACTIVE);
-    INPUTS_Get_Value_ExpectAndReturn(IN_Ignition, INPUT_ACTIVE);
+static void _transition_init_to_off() {
+    CAN_Get_Value_ExpectAndReturn(CAN_BUS_IDLE);
+    PMIC_Controller();
 }
 
-static void simulate_can_activity(void) {
-    CAN_Get_Value_ExpectAndReturn(CAN_BUS_OPERATIVE);
-    INPUTS_Get_Value_ExpectAndReturn(IN_PowerBtn, INPUT_INACTIVE);
-    INPUTS_Get_Value_ExpectAndReturn(IN_Ignition, INPUT_INACTIVE);
-    INPUTS_Get_Value_ExpectAndReturn(IN_PowerBtn, INPUT_INACTIVE);
-    INPUTS_Get_Value_ExpectAndReturn(IN_Ignition, INPUT_INACTIVE);
+static void _transition_off_to_on_by_power_button(void) {
+    CAN_Get_Value_ExpectAndReturn(CAN_BUS_IDLE); /* dummy value */
+    _simulate_power_button_press();
+    GPIO_setOutputHighOnPin_Expect(POWER_ON_PORT, POWER_ON_PIN);
+    PMIC_Controller();
 }
-
 
 /* === Public function implementation ========================================================== */
-
 
 /* Initial setup conditions*/
 void test_pmic_initial_setup_conditions(void) {
@@ -87,7 +82,7 @@ void test_pmic_initial_setup_conditions(void) {
     uint8_t pmic_can_activity = (uint8_t)0xFF;
     uint8_t pmic_PowerUp_Condition = (uint8_t)0xFF;
 
-    GPIO_setAsOutputPin_Expect(POWER_ON_PORT, POWER_ON_PIN);    // PORT_PwrOn must be configurated
+    GPIO_setAsOutputPin_Expect(POWER_ON_PORT, POWER_ON_PIN);    // PORT_PwrOn must be configured
     GPIO_setOutputLowOnPin_Expect(POWER_ON_PORT, POWER_ON_PIN); // PORT_PwrOn must be cleared
 
     PMIC_Init();
@@ -100,15 +95,13 @@ void test_pmic_initial_setup_conditions(void) {
     TEST_ASSERT_EQUAL_UINT8((uint8_t)POWERDOWN, pmic_PowerUp_Condition);
 }
 
-/*********** INIT --> OFF transition ***********/
+/*********** Transition: INIT --> OFF ***********/
 
 void test_pmic_transition_init_to_off(void) {
     uint8_t pmic_state = (uint8_t)0xFF;
     uint8_t pmic_PowerUp_Condition = (uint8_t)0xFF;
 
-    /* Trigger state machine transition */
-    CAN_Get_Value_ExpectAndReturn(CAN_BUS_IDLE);
-    PMIC_Controller();
+    _transition_init_to_off();
 
     /* Get state machine values */
     PMIC_Get_State(&pmic_state);
@@ -118,26 +111,16 @@ void test_pmic_transition_init_to_off(void) {
     TEST_ASSERT_EQUAL_UINT8((uint8_t)POWERDOWN, pmic_PowerUp_Condition);
 }
 
-/*********** OFF --> ON transitions ***********/
+/*********** Transition: OFF --> ON ***********/
 
 /* Triggered by power button */
 void test_pmic_transition_off_to_on_on_power_button(void) {
     uint8_t pmic_state = (uint8_t)0xFF;
     uint8_t pmic_PowerUp_Condition = (uint8_t)0xFF;
 
-    // Setup OFF state
-    CAN_Get_Value_ExpectAndReturn(CAN_BUS_IDLE);
-    PMIC_Controller();
+    _transition_init_to_off();
 
-    // Mock inputs values
-    CAN_Get_Value_ExpectAndReturn(CAN_BUS_IDLE);
-    INPUTS_Get_Value_ExpectAndReturn(IN_PowerBtn, INPUT_ACTIVE);
-    INPUTS_Get_Value_ExpectAndReturn(IN_PowerBtn, INPUT_ACTIVE);
-    
-    /* Power on MUST be set */
-    GPIO_setOutputHighOnPin_Expect(POWER_ON_PORT, POWER_ON_PIN);
-
-    PMIC_Controller(); 
+    _transition_off_to_on_by_power_button();
 
     PMIC_Get_State(&pmic_state);
     PMIC_Get_PowerUp_Condition(&pmic_PowerUp_Condition);
@@ -150,11 +133,8 @@ void test_pmic_transition_off_to_on_by_ignition(void) {
     uint8_t pmic_state = (uint8_t)0xFF;
     uint8_t pmic_PowerUp_Condition = (uint8_t)0xFF;
 
-    // Setup OFF state
-    CAN_Get_Value_ExpectAndReturn(CAN_BUS_IDLE);
-    PMIC_Controller();
+    _transition_init_to_off();
 
-    // Mock inputs values
     CAN_Get_Value_ExpectAndReturn(CAN_BUS_IDLE);
     INPUTS_Get_Value_ExpectAndReturn(IN_PowerBtn, INPUT_INACTIVE);
     INPUTS_Get_Value_ExpectAndReturn(IN_Ignition, INPUT_ACTIVE);
@@ -177,11 +157,9 @@ void test_pmic_transition_off_to_on_by_can(void) {
     uint8_t pmic_state = (uint8_t)0xFF;
     uint8_t pmic_PowerUp_Condition = (uint8_t)0xFF;
 
-    // Setup OFF state
-    CAN_Get_Value_ExpectAndReturn(CAN_BUS_IDLE);
-    PMIC_Controller();
+    _transition_init_to_off();
 
-    // Mock inputs values
+    /* Mock inputs values */
     CAN_Get_Value_ExpectAndReturn(CAN_BUS_OPERATIVE);
     INPUTS_Get_Value_ExpectAndReturn(IN_PowerBtn, INPUT_INACTIVE);
     INPUTS_Get_Value_ExpectAndReturn(IN_Ignition, INPUT_INACTIVE);
@@ -200,28 +178,22 @@ void test_pmic_transition_off_to_on_by_can(void) {
 }
 
 
-/*********** ON --> IDLE transitions ***********/
+/*********** Transition: ON --> IDLE ***********/
 
 /* Triggered by power button */
 void test_pmic_transition_on_to_idle(void) {
     uint8_t pmic_state = (uint8_t)0xFF;
     uint8_t pmic_PowerUp_Condition = (uint8_t)0xFF;
 
-    /* Transition to OFF state */
-    CAN_Get_Value_ExpectAndReturn(CAN_BUS_IDLE);
-    PMIC_Controller();
+    _transition_init_to_off();
+
 
     /* Transition to ON state */
-    CAN_Get_Value_ExpectAndReturn(CAN_BUS_OPERATIVE);
-    INPUTS_Get_Value_ExpectAndReturn(IN_PowerBtn, INPUT_ACTIVE);
-    INPUTS_Get_Value_ExpectAndReturn(IN_PowerBtn, INPUT_ACTIVE);
-    /* Power on MUST be set */
-    GPIO_setOutputHighOnPin_Expect(POWER_ON_PORT, POWER_ON_PIN);
-    PMIC_Controller(); 
+    _transition_off_to_on_by_power_button();
 
     PMIC_KeepAlive(false);
     for(uint16_t i = FORCE_SHUTDOWN_TIMEOUT; i > 0; i--) {
-        CAN_Get_Value_ExpectAndReturn(CAN_BUS_OPERATIVE); /* This value is irrelevant */
+        CAN_Get_Value_ExpectAndReturn(CAN_BUS_OPERATIVE); /* dummy value */
         INPUTS_Get_Value_ExpectAndReturn(IN_PowerBtn, INPUT_ACTIVE);
         PMIC_Controller(); 
     }
@@ -230,29 +202,21 @@ void test_pmic_transition_on_to_idle(void) {
     TEST_ASSERT_EQUAL_UINT8((uint8_t)PMIC_CS_IDLE, pmic_state);
 }
 
-/*********** ON --> INIT transitions ***********/
+/*********** Transition: ON --> INIT ***********/
 
 /* Triggered by the keep alive timer */
 void test_pmic_transition_on_to_init_by_keep_alive_timer(void) {
     uint8_t pmic_state = (uint8_t)0xFF;
     uint8_t pmic_PowerUp_Condition = (uint8_t)0xFF;
 
-    /* Transition to OFF state */
-    CAN_Get_Value_ExpectAndReturn(CAN_BUS_IDLE);
-    PMIC_Controller();
+    _transition_init_to_off();
 
-    /* Transition to ON state */
-    CAN_Get_Value_ExpectAndReturn(CAN_BUS_OPERATIVE);
-    INPUTS_Get_Value_ExpectAndReturn(IN_PowerBtn, INPUT_ACTIVE);
-    INPUTS_Get_Value_ExpectAndReturn(IN_PowerBtn, INPUT_ACTIVE);
-    /* Power on MUST be set */
-    GPIO_setOutputHighOnPin_Expect(POWER_ON_PORT, POWER_ON_PIN);
-    PMIC_Controller();
+    _transition_off_to_on_by_power_button();
 
     /* Enable keep alive timer */
     PMIC_KeepAlive(true);
     for(uint16_t i = KEEP_ALIVE_TIMEOUT; i > 0; i--) {
-        CAN_Get_Value_ExpectAndReturn(CAN_BUS_OPERATIVE); /* This value is irrelevant */
+        CAN_Get_Value_ExpectAndReturn(CAN_BUS_OPERATIVE);
         INPUTS_Get_Value_ExpectAndReturn(IN_PowerBtn, INPUT_INACTIVE);
         PMIC_Controller();
     }
@@ -266,21 +230,13 @@ void test_pmic_transition_on_to_init_by_request_shutdown_timer(void) {
     uint8_t pmic_state = (uint8_t)0xFF;
     uint8_t pmic_PowerUp_Condition = (uint8_t)0xFF;
 
-    /* Transition to OFF state */
-    CAN_Get_Value_ExpectAndReturn(CAN_BUS_IDLE);
-    PMIC_Controller();
+    _transition_init_to_off();
 
-    /* Transition to ON state */
-    CAN_Get_Value_ExpectAndReturn(CAN_BUS_OPERATIVE);
-    INPUTS_Get_Value_ExpectAndReturn(IN_PowerBtn, INPUT_ACTIVE);
-    INPUTS_Get_Value_ExpectAndReturn(IN_PowerBtn, INPUT_ACTIVE);
-    /* Power on MUST be set */
-    GPIO_setOutputHighOnPin_Expect(POWER_ON_PORT, POWER_ON_PIN);
-    PMIC_Controller();
+    _transition_off_to_on_by_power_button();
 
     /* Force Shutdown timeout */
     PMIC_Shutdown(0);
-    CAN_Get_Value_ExpectAndReturn(CAN_BUS_OPERATIVE); /* This value is irrelevant */
+    CAN_Get_Value_ExpectAndReturn(CAN_BUS_OPERATIVE); /* dummy value */
     INPUTS_Get_Value_ExpectAndReturn(IN_PowerBtn, INPUT_INACTIVE);
     PMIC_Controller();
 
@@ -288,33 +244,25 @@ void test_pmic_transition_on_to_init_by_request_shutdown_timer(void) {
     TEST_ASSERT_EQUAL_UINT8((uint8_t)PMIC_CS_INIT, pmic_state);
 }
 
-/*********** IDLE --> INIT transitions ***********/
+/*********** Transition: IDLE --> INIT ***********/
 
 void test_pmic_transition_idle_to_init(void) {
     uint8_t pmic_state = (uint8_t)0xFF;
     uint8_t pmic_PowerUp_Condition = (uint8_t)0xFF;
 
-    /* Transition to OFF state */
-    CAN_Get_Value_ExpectAndReturn(CAN_BUS_IDLE);
-    PMIC_Controller();
+    _transition_init_to_off();
 
-    /* Transition to ON state */
-    CAN_Get_Value_ExpectAndReturn(CAN_BUS_OPERATIVE);
-    INPUTS_Get_Value_ExpectAndReturn(IN_PowerBtn, INPUT_ACTIVE);
-    INPUTS_Get_Value_ExpectAndReturn(IN_PowerBtn, INPUT_ACTIVE);
-    /* Power on MUST be set */
-    GPIO_setOutputHighOnPin_Expect(POWER_ON_PORT, POWER_ON_PIN);
-    PMIC_Controller();
+    _transition_off_to_on_by_power_button();
 
     /* Transition to IDLE state*/
     PMIC_KeepAlive(false);
     for(uint16_t i = FORCE_SHUTDOWN_TIMEOUT; i > 0; i--) {
-        CAN_Get_Value_ExpectAndReturn(CAN_BUS_OPERATIVE); /* This value is irrelevant */
+        CAN_Get_Value_ExpectAndReturn(CAN_BUS_OPERATIVE); /* dummy value */
         INPUTS_Get_Value_ExpectAndReturn(IN_PowerBtn, INPUT_ACTIVE);
         PMIC_Controller();
     }
 
-    /* Tranistion to INIT state */
+    /* Transition to INIT state */
     CAN_Get_Value_ExpectAndReturn(CAN_BUS_OPERATIVE);
     INPUTS_Get_Value_ExpectAndReturn(IN_PowerBtn, INPUT_INACTIVE);
     PMIC_Controller(); 

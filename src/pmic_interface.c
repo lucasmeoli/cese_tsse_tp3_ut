@@ -9,12 +9,10 @@
 /*===========================================================================*
 * Header Files
 *===========================================================================*/
-// #include "captivate.h"
-// #include "adc_interface.h"
-// #include "inputs.h"
+#include "pmic_interface.h"
+#include "adc_interface.h"
 #include "can.h"
 #include "inputs.h"
-#include "pmic_interface.h"
 
 /*===========================================================================*
  * Local Preprocessor #define Constants
@@ -58,8 +56,8 @@ CAN_activity_t can_active;
 /*===========================================================================*
  * Local Function Prototypes
  *===========================================================================*/
-// void pmic_start_activities (void);
-// void pmic_stop_activities (void);
+void pmic_start_activities (void);
+void pmic_stop_activities (void);
 
 /*===========================================================================*
  * Local Inline Function Definitions and Function-Like Macros
@@ -212,7 +210,7 @@ bool_t pmic_check_inputs (void)
 void pmic_start_activities (void)
 {
     OUT_Set_PowerOn();  /* POWER ON */
-    // //ADC_Start();
+    ADC_Start();
 }
 
 /***************************************************************************//**
@@ -228,8 +226,8 @@ void pmic_start_activities (void)
 ******************************************************************************/
 void pmic_stop_activities (void)
 {
-    // OUT_Clr_PowerOn(); /* POWER OFF */
-    // //ADC_Stop();
+    OUT_Clr_PowerOn(); /* POWER OFF */
+    ADC_Stop();
 }
 
 /***************************************************************************//**

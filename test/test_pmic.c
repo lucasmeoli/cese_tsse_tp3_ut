@@ -27,9 +27,11 @@ SPDX-License-Identifier: MIT
 
 #include "unity.h"
 #include "pmic_interface.h"
+#include "mock_adc_interface.h"
 #include "mock_can.h"
 #include "mock_gpio.h"
 #include "mock_inputs.h"
+
 
 /* === Macros definitions ====================================================================== */
 #define POWER_ON_PORT               GPIO_PORT_P2
@@ -62,15 +64,26 @@ static void _simulate_power_button_press(void) {
     INPUTS_Get_Value_ExpectAndReturn(IN_PowerBtn, INPUT_ACTIVE);
 }
 
+static void _simulate_pmic_start_activities(void) {
+    GPIO_setOutputHighOnPin_Expect(POWER_ON_PORT, POWER_ON_PIN);
+    ADC_Start_Expect();
+}
+
+static void _simulate_pmic_stop_activities(void) {
+    GPIO_setOutputLowOnPin_Expect(POWER_ON_PORT, POWER_ON_PIN);
+    ADC_Stop_Expect();
+}
+
 static void _transition_init_to_off() {
     CAN_Get_Value_ExpectAndReturn(CAN_BUS_IDLE);
+    _simulate_pmic_stop_activities();
     PMIC_Controller();
 }
 
 static void _transition_off_to_on_by_power_button(void) {
     CAN_Get_Value_ExpectAndReturn(CAN_BUS_IDLE); /* dummy value */
     _simulate_power_button_press();
-    GPIO_setOutputHighOnPin_Expect(POWER_ON_PORT, POWER_ON_PIN);
+    _simulate_pmic_start_activities();
     PMIC_Controller();
 }
 
@@ -142,7 +155,7 @@ void test_pmic_transition_off_to_on_by_ignition(void) {
     INPUTS_Get_Value_ExpectAndReturn(IN_Ignition, INPUT_ACTIVE);
     
     /* Power on MUST be set */
-    GPIO_setOutputHighOnPin_Expect(POWER_ON_PORT, POWER_ON_PIN);
+    _simulate_pmic_start_activities();
 
     PMIC_Controller(); 
 
@@ -167,7 +180,7 @@ void test_pmic_transition_off_to_on_by_can(void) {
     INPUTS_Get_Value_ExpectAndReturn(IN_Ignition, INPUT_INACTIVE);
 
     /* Power on MUST be set */
-    GPIO_setOutputHighOnPin_Expect(POWER_ON_PORT, POWER_ON_PIN);
+    _simulate_pmic_start_activities();
 
     PMIC_Controller(); 
 
@@ -187,8 +200,6 @@ void test_pmic_transition_on_to_idle(void) {
 
     _transition_init_to_off();
 
-
-    /* Transition to ON state */
     _transition_off_to_on_by_power_button();
 
     PMIC_KeepAlive(false);
@@ -272,4 +283,3 @@ void test_pmic_transition_idle_to_init(void) {
 }
 
 /* === End of documentation ==================================================================== */
-
